@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jogo do Chel Chel</title>
+    <style>
+        body {
+            text-align: center;
+            background-image: url('C:/Users/Pedro/OneDrive/Pictures/Screenshots/4k-imagens-da-natureza-ztbad1qj8vdjqe0p.jpg');
+            background-size: cover;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+
+        canvas {
+            background: rgba(0, 0, 0, 0.5);  
+            display: block;
+            margin: auto;
+        }
+
+        /* Estilo do botão */
+        button {
+            background-color: #28a745;
+            color: white;
+            font-size: 18px;
+            padding: 15px 30px;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #218838;
+        }
+
+        /* Estilo do painel de instruções */
+        #instructions {
+            display: none;
+            margin-top: 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 10px;
+            max-width: 600px;
+            margin: 20px auto;
+            color: white;
+            font-size: 16px;
+            text-align: left;
+            overflow: hidden;
+            max-height: 0;
+            transition: max-height 1s ease-out;
+        }
+
+        #instructions.show {
+            display: block;
+            max-height: 400px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Jogo do Chel Chel</h1>
+    
+    <button id="showInstructionsBtn">Clique aqui para ver as instruções</button>
+
+    <div id="instructions">
+        <h3>Instruções do Jogo</h3>
+        <p>Use o mouse para mover o jogador. Atire automaticamente!</p>
+        <p>Pressione "P" ou "Espaço" para pausar/despausar.</p>
+        <p>O jogo avança de fase a cada 1 minuto e 40 segundos.</p>
+        <p><strong>Fase 2:</strong> Ovos mais rápidos.</p>
+        <p><strong>Fase 3:</strong> O jogador se move mais rápido.</p>
+        <p><strong>Fase 4:</strong> Vidas reduzidas para 3.</p>
+        <p><strong>Fase 5:</strong> Ovos mais rápidos e mais rápidos.</p>
+        <p>Reinicie a página caso queira jogar novamente.</p>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        // Função para exibir as instruções com animação
+        document.getElementById("showInstructionsBtn").addEventListener("click", function() {
+            const instructions = document.getElementById("instructions");
+            instructions.classList.toggle("show");  // Alterna a exibição das instruções
+
+            // Faz rolar suavemente para as instruções
+            window.scrollTo({
+                top: instructions.offsetTop - 50,  // Faz rolar para o topo das instruções
+                behavior: 'smooth'
+            });
+        });
+
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        canvas.width = 700;
+        canvas.height = 500;
+
+        let score = 0;
+        let lives = 5;
+        let eggs = [];
+        let bullets = [];
+        let gameOver = false;
+        let phase = 1;
+        let eggSpeedMultiplier = 1;
+        let bulletInterval = 500;
+        let playerSpeed = 1;
+        let boostActive = false;
+        let paused = false;  // Variável para controlar a pausa
+
+        const playerImage = new Image();
+        playerImage.src = "C:/Users/Pedro/OneDrive/Documents/projetojogo.cs/Captura de tela 2025-03-08 001509.png"; // Caminho da captura de tela
+
+        const eggImage = new Image();
+        eggImage.src = 'C:/Users/Pedro/OneDrive/Desktop/chell/Captura de tela 2025-03-08 010354.png';  // Caminho da imagem do ovo
+
+        const player = { x: canvas.width / 2, y: canvas.height - 30, width: 20, height: 20 };
+
+        function drawPlayer() {
+            ctx.drawImage(playerImage, player.x, player.y, player.width, player.height); // Desenha a imagem do jogador
+        }
+
+        function createEgg() {
+            if (!gameOver && !paused) {
+                let speed = 2 * eggSpeedMultiplier;
+                if (phase >= 3 && Math.random() < 0.2) speed *= 2; // Super ovos
+                eggs.push({ x: Math.random() * (canvas.width - 20), y: 0, radius: 20, speed: speed }); // Aumentei o raio para ajustar o tamanho da imagem
+            }
+        }
+
+        function drawEggs() {
+            eggs.forEach(egg => {
+                ctx.drawImage(eggImage, egg.x - egg.radius, egg.y - egg.radius, egg.radius * 2, egg.radius * 2);  // Desenha a imagem do ovo
+            });
+        }
+
+        function updateEggs() {
+            eggs.forEach((egg, index) => {
+                egg.y += egg.speed;
+                if (egg.y > canvas.height) {
+                    eggs.splice(index, 1);
+                    lives--;
+                    if (lives <= 0) gameOver = true;
+                }
+            });
+        }
+
+        function shootBullet() {
+            if (!gameOver && !paused) {
+                bullets.push({ x: player.x + 10, y: player.y, radius: 5, speed: 5 });
+            }
+        }
+
+        function drawBullets() {
+            ctx.fillStyle = "red";
+            bullets.forEach(bullet => {
+                ctx.beginPath();
+                ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        function updateBullets() {
+            bullets.forEach((bullet, bulletIndex) => {
+                bullet.y -= bullet.speed;
+                if (bullet.y < 0) bullets.splice(bulletIndex, 1);
+            });
+        }
+
+        function checkCollisions() {
+            bullets.forEach((bullet, bulletIndex) => {
+                eggs.forEach((egg, eggIndex) => {
+                    const dx = bullet.x - egg.x;
+                    const dy = bullet.y - egg.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < bullet.radius + egg.radius) {
+                        bullets.splice(bulletIndex, 1);
+                        eggs.splice(eggIndex, 1);
+                        score++;
+
+                        if (phase >= 4 && Math.random() < 0.2) activateBoost();
+                    }
+                });
+            });
+        }
+
+        function drawHUD() {
+            ctx.fillStyle = "white";
+            ctx.font = "20px Arial"; // Defina o tamanho da fonte aqui para manter consistente
+            ctx.fillText(`Fase: ${phase} | Score: ${score} | Vidas: ${lives}`, 10, 20);
+        }
+
+        function activateBoost() {
+            if (!boostActive) {
+                boostActive = true;
+                bulletInterval /= 2;
+                setTimeout(() => {
+                    bulletInterval *= 2;
+                    boostActive = false;
+                }, 3000);
+            }
+        }
+
+        function updateGame() {
+            if (gameOver) {
+                ctx.fillStyle = "white";
+                ctx.font = "40px Arial";
+                ctx.fillText("Game Over", canvas.width / 2 - 100, canvas.height / 2);
+                return;
+            }
+
+            if (paused) {
+                ctx.fillStyle = "white";
+                ctx.font = "40px Arial";
+                ctx.fillText("Pausado", canvas.width / 2 - 70, canvas.height / 2);
+                return; // Não atualiza o jogo enquanto estiver pausado
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawPlayer();
+            drawEggs();
+            drawBullets();
+            drawHUD();
+            updateEggs();
+            updateBullets();
+            checkCollisions();
+        }
+
+        function nextPhase() {
+            phase++;
+            if (phase > 5) phase = 5;
+            if (phase >= 2) setInterval(() => eggSpeedMultiplier *= phase === 5 ? 1.13 : (phase === 4 ? 1.06 : (phase === 3 ? 1.04 : 1.03)), 60000);
+            if (phase >= 2) bulletInterval *= 0.5;
+            if (phase >= 3) playerSpeed *= 1.1;
+            if (phase === 4) lives = 3;
+        }
+
+        // Evento para alternar entre pausa e despausa (pressionando "P" ou "Espaço")
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "p" || event.key === "P") {
+                paused = !paused;  // Alterna a pausa ao pressionar 'P'
+            }
+            if (event.key === " " || event.key === "Spacebar") {
+                paused = !paused;  // Alterna a pausa ao pressionar a tecla de espaço
+            }
+        });
+
+        // Evento para movimentar o jogador
+        canvas.addEventListener("mousemove", event => {
+            player.x = (event.clientX - canvas.offsetLeft - player.width / 2) * playerSpeed;
+        });
+
+        setInterval(createEgg, 1000);
+        setInterval(shootBullet, bulletInterval);
+        setInterval(() => nextPhase(), 100000); // 5 minutos por fase
+
+        function gameLoop() {
+            updateGame();
+            requestAnimationFrame(gameLoop);
+        }
+        gameLoop();
+    </script>
+</body>
+</html>
